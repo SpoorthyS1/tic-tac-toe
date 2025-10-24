@@ -5,9 +5,19 @@ from pydantic import BaseModel
 import uuid
 import prog1
 
+# simple API key guard - MOVE THIS BEFORE app = FastAPI()
+API_KEY = os.environ.get("API_KEY")
+
+def verify_api_key(x_api_key: str | None = Header(None)):
+    if not API_KEY:
+        return True
+    if x_api_key != API_KEY:
+        raise HTTPException(status_code=401, detail="Invalid or missing API key")
+    return True
+
+# Now create app with dependency
 app = FastAPI(title="LetMeKnow TicTacToe API", dependencies=[Depends(verify_api_key)])
 
-# allow all origins (safe for testing/demo)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -53,14 +63,3 @@ def reset_game(game_id: str):
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     return game['reset']()
-
-# simple API key guard
-API_KEY = os.environ.get("API_KEY")  # set this in Render / Railway / your host
-
-def verify_api_key(x_api_key: str | None = Header(None)):
-    # if no API_KEY configured, allow access (useful for local dev)
-    if not API_KEY:
-        return True
-    if x_api_key != API_KEY:
-        raise HTTPException(status_code=401, detail="Invalid or missing API key")
-    return True
