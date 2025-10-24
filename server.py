@@ -1,6 +1,7 @@
 import os
 from fastapi import FastAPI, HTTPException, Depends, Header
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import uuid
 import prog1
@@ -35,36 +36,27 @@ class MoveReq(BaseModel):
     row: int
     col: int
 
-# Public root endpoint (no auth required)
+# Serve the HTML game interface
 @app.get("/")
 def read_root():
-    return {
-        "message": "Tic Tac Toe API",
-        "docs": "/docs",
-        "endpoints": {
-            "create_game": "POST /games",
-            "get_state": "GET /games/{game_id}/state",
-            "make_move": "POST /games/{game_id}/move",
-            "reset_game": "POST /games/{game_id}/reset"
-        }
-    }
+    return FileResponse('static/index.html')
 
-# Protected endpoints (add dependency to each)
-@app.post("/games", dependencies=[Depends(verify_api_key)])
+# Protected endpoints (add dependency to each if you want API key)
+@app.post("/games")
 def create_game(req: CreateGameReq):
     game = prog1.create_game(human_symbol=req.human_symbol, ai_difficulty=req.ai_difficulty)
     game_id = str(uuid.uuid4())
     GAMES[game_id] = game
     return {"game_id": game_id, "state": game['get_state']()}
 
-@app.get("/games/{game_id}/state", dependencies=[Depends(verify_api_key)])
+@app.get("/games/{game_id}/state")
 def get_state(game_id: str):
     game = GAMES.get(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     return {"state": game['get_state']()}
 
-@app.post("/games/{game_id}/move", dependencies=[Depends(verify_api_key)])
+@app.post("/games/{game_id}/move")
 def make_move(game_id: str, req: MoveReq):
     game = GAMES.get(game_id)
     if not game:
@@ -72,7 +64,7 @@ def make_move(game_id: str, req: MoveReq):
     result = game['make_move'](req.row, req.col)
     return {"result": result, "state": game['get_state']()}
 
-@app.post("/games/{game_id}/reset", dependencies=[Depends(verify_api_key)])
+@app.post("/games/{game_id}/reset")
 def reset_game(game_id: str):
     game = GAMES.get(game_id)
     if not game:
