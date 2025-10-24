@@ -5,7 +5,7 @@ from pydantic import BaseModel
 import uuid
 import prog1
 
-# simple API key guard - MOVE THIS BEFORE app = FastAPI()
+# simple API key guard
 API_KEY = os.environ.get("API_KEY")
 
 def verify_api_key(x_api_key: str | None = Header(None)):
@@ -15,8 +15,8 @@ def verify_api_key(x_api_key: str | None = Header(None)):
         raise HTTPException(status_code=401, detail="Invalid or missing API key")
     return True
 
-# Now create app with dependency
-app = FastAPI(title="LetMeKnow TicTacToe API", dependencies=[Depends(verify_api_key)])
+# Create app WITHOUT global dependency
+app = FastAPI(title="LetMeKnow TicTacToe API")
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,21 +35,36 @@ class MoveReq(BaseModel):
     row: int
     col: int
 
-@app.post("/games")
+# Public root endpoint (no auth required)
+@app.get("/")
+def read_root():
+    return {
+        "message": "Tic Tac Toe API",
+        "docs": "/docs",
+        "endpoints": {
+            "create_game": "POST /games",
+            "get_state": "GET /games/{game_id}/state",
+            "make_move": "POST /games/{game_id}/move",
+            "reset_game": "POST /games/{game_id}/reset"
+        }
+    }
+
+# Protected endpoints (add dependency to each)
+@app.post("/games", dependencies=[Depends(verify_api_key)])
 def create_game(req: CreateGameReq):
     game = prog1.create_game(human_symbol=req.human_symbol, ai_difficulty=req.ai_difficulty)
     game_id = str(uuid.uuid4())
     GAMES[game_id] = game
     return {"game_id": game_id, "state": game['get_state']()}
 
-@app.get("/games/{game_id}/state")
+@app.get("/games/{game_id}/state", dependencies=[Depends(verify_api_key)])
 def get_state(game_id: str):
     game = GAMES.get(game_id)
     if not game:
         raise HTTPException(status_code=404, detail="Game not found")
     return {"state": game['get_state']()}
 
-@app.post("/games/{game_id}/move")
+@app.post("/games/{game_id}/move", dependencies=[Depends(verify_api_key)])
 def make_move(game_id: str, req: MoveReq):
     game = GAMES.get(game_id)
     if not game:
@@ -57,7 +72,7 @@ def make_move(game_id: str, req: MoveReq):
     result = game['make_move'](req.row, req.col)
     return {"result": result, "state": game['get_state']()}
 
-@app.post("/games/{game_id}/reset")
+@app.post("/games/{game_id}/reset", dependencies=[Depends(verify_api_key)])
 def reset_game(game_id: str):
     game = GAMES.get(game_id)
     if not game:
